@@ -13,7 +13,7 @@ from config import DATA_DIR, CORPUS_DIR, RESULTS_DIR
 
 def prepare_test_set(num_samples=1000):
     """
-    Giải quyết Tình huống A: Tạo tập test bằng cách đối chiếu câu hỏi SQuAD 
+    Giải quyết Tình huống Tạo tập test bằng cách đối chiếu câu hỏi SQuAD 
     với parent_id trong corpus của chúng ta.
     """
     test_qa_path = os.path.join(DATA_DIR, "qa", "test_qa.json")
@@ -24,7 +24,7 @@ def prepare_test_set(num_samples=1000):
         with open(test_qa_path, "r", encoding="utf-8") as f:
             return json.load(f)
             
-    print("1. Đang tái tạo tập Test QA (Giải quyết Tình huống A)...")
+    print("1. Đang tái tạo tập Test QA...")
     with open(os.path.join(CORPUS_DIR, "passages.json"), "r", encoding="utf-8") as f:
         corpus = json.load(f)
     
@@ -33,7 +33,7 @@ def prepare_test_set(num_samples=1000):
     del corpus
     gc.collect()
     
-    squad = load_dataset("squad", split="validation")
+    squad = load_dataset("squad", split="train")
     valid_qa = []
     
     # Tìm các câu hỏi có context khớp chính xác với corpus của ta
