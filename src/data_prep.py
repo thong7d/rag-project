@@ -6,7 +6,6 @@ from config import CORPUS_DIR
 def build_hybrid_corpus(target_passages=50000, output_filename="passages.json"):
     """
     Xây dựng corpus từ SQuAD và Wikipedia (Streaming để chống OOM).
-    Giữ lại ở mức paragraph, không đếm token ở đây (nhường cho Phase 3).
     """
     output_filepath = os.path.join(CORPUS_DIR, output_filename)
     
@@ -35,14 +34,14 @@ def build_hybrid_corpus(target_passages=50000, output_filename="passages.json"):
     print(f"   -> Đã trích xuất {squad_count} passages từ SQuAD.")
 
     print(f"2. Đang streaming Wikipedia để bù đắp cho đủ {target_passages} passages...")
-    # Dùng Streaming API để chống tràn RAM (OOM)
-    wiki_stream = load_dataset("wikipedia", "20220301.en", split="train", streaming=True)
+    
+    # [ĐÃ FIX BUG Ở ĐÂY]: Dùng wikimedia/wikipedia chuẩn Parquet thay vì script cũ
+    wiki_stream = load_dataset("wikimedia/wikipedia", "20231101.en", split="train", streaming=True)
     
     for article in wiki_stream:
         if current_id > target_passages:
             break
             
-        # Tách bài viết thành các đoạn văn (paragraphs) thay vì lấy cả bài dài
         paragraphs = [p.strip() for p in article["text"].split("\n\n") if len(p.strip()) > 50]
         
         for p in paragraphs:
@@ -61,7 +60,6 @@ def build_hybrid_corpus(target_passages=50000, output_filename="passages.json"):
             print(f"   -> Đã gom được {current_id}/{target_passages} passages...")
 
     print("3. Đang ghi file xuống Google Drive (I/O Operation)...")
-    # Giải phóng set để trống RAM trước khi ghi file
     del seen_texts 
     
     with open(output_filepath, "w", encoding="utf-8") as f:
@@ -71,5 +69,4 @@ def build_hybrid_corpus(target_passages=50000, output_filename="passages.json"):
     return output_filepath
 
 if __name__ == "__main__":
-    # Cho phép test trực tiếp bằng lệnh `python src/data_prep.py` trên local
     build_hybrid_corpus()
