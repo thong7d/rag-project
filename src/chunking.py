@@ -1,7 +1,8 @@
 import json
 import os
 from transformers import AutoTokenizer
-from src.config import CORPUS_DIR, DATA_DIR
+# [ĐÃ FIX BUG]: Gọi trực tiếp config vì sys.path đã ở thư mục src
+from config import CORPUS_DIR, DATA_DIR
 
 def process_chunking(chunk_size=200, overlap=50, input_filename="passages.json", output_filename="chunks.json"):
     """
@@ -22,7 +23,6 @@ def process_chunking(chunk_size=200, overlap=50, input_filename="passages.json",
     with open(input_filepath, "r", encoding="utf-8") as f:
         corpus = json.load(f)
 
-    # Sử dụng đúng Tokenizer sẽ dùng ở Phase 4 để tránh lệch chuẩn ngữ nghĩa
     print("2. Đang khởi tạo Tokenizer (all-MiniLM-L6-v2)...")
     tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
 
@@ -30,19 +30,14 @@ def process_chunking(chunk_size=200, overlap=50, input_filename="passages.json",
     print(f"3. Bắt đầu cắt chunk (Size: {chunk_size}, Overlap: {overlap}). Quá trình này có thể mất vài phút...")
     
     for idx, doc in enumerate(corpus):
-        # Chuyển văn bản thành danh sách các token IDs
         tokens = tokenizer(doc["text"], add_special_tokens=False)["input_ids"]
         
-        # Sliding window logic
         i = 0
         chunk_idx = 0
         while i < len(tokens) or (i == 0 and len(tokens) == 0):
-            # Cắt mảng token
             chunk_tokens = tokens[i:i + chunk_size]
-            # Giải mã ngược lại thành văn bản string
             chunk_text = tokenizer.decode(chunk_tokens, skip_special_tokens=True)
             
-            # Chỉ lưu các chunk có nội dung thực sự (tránh rác)
             if len(chunk_text.strip()) > 0:
                 chunks.append({
                     "chunk_id": f"{doc['id']}_{chunk_idx}",
@@ -66,5 +61,4 @@ def process_chunking(chunk_size=200, overlap=50, input_filename="passages.json",
     return output_filepath
 
 if __name__ == "__main__":
-    # Test local nếu cần
     pass
