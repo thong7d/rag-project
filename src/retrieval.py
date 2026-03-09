@@ -42,9 +42,9 @@ def prepare_test_set(num_samples=1000):
         if context in text_to_id:
             valid_qa.append({
                 "question": item["question"],
-                "target_parent_id": text_to_id[context]
+                "target_parent_id": text_to_id[context],
+                "answers": item["answers"]["text"] # DÒNG NÀY ĐỂ LẤY ĐÁP ÁN
             })
-            
     # Lấy ngẫu nhiên num_samples câu hỏi
     random.seed(42)
     test_set = random.sample(valid_qa, min(num_samples, len(valid_qa)))
