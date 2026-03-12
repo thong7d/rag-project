@@ -1,47 +1,62 @@
 import os
 import torch
 import gc
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from config import DATA_DIR
 
 class RAGGenerator:
-    def __init__(self, model_name="google/flan-t5-base"):
+    def __init__(self, model_name="microsoft/Phi-3-mini-4k-instruct"):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Loading {model_name} on {self.device.upper()}...")
+        print(f"Loading {model_name} in 4-bit quantization on {self.device.upper()}...")
+        
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
+        
+        # 4-bit Quantization Config to prevent OOM on Colab T4
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+        )
+        
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            quantization_config=bnb_config,
+            device_map="auto",
+            trust_remote_code=True
+        )
         
     def generate_answer(self, question, retrieved_passages):
         """
-        Generate answer using Sandwich Prompting to prevent Mechanical Truncation and Recency Bias.
+        Generate answer using strict Instruction Prompting for LLMs.
         """
         context_str = "\n\n".join(retrieved_passages)
         
-        # Sandwich Prompt: Question at the top, Context in the middle, Instruction at the bottom
+        # System Prompt strictness to prevent Data Leakage and Hallucination
         prompt = (
-            f"Question: {question}\n\n"
+            f"<|user|>\n"
+            f"You are a highly accurate question-answering assistant.\n"
+            f"Answer the following question based STRICTLY and ONLY on the provided context.\n"
+            f"If the answer is not contained in the context, say 'Information not found'.\n\n"
             f"Context:\n{context_str}\n\n"
-            f"Instruction: Based on the context provided above, briefly answer the question: {question}\n\n"
-            f"Answer:"
+            f"Question: {question}<|end|>\n"
+            f"<|assistant|>\n"
         )
         
-        # Tokenize with truncation enabled. Truncation will cut the middle context if it exceeds max_length
-        inputs = self.tokenizer(
-            prompt, 
-            return_tensors="pt", 
-            max_length=1024, 
-            truncation=True
-        ).to(self.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048).to(self.device)
         
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=50, 
-                num_beams=2,       
-                early_stopping=True
+                max_new_tokens=100,
+                temperature=0.1, # Low temperature for factual consistency
+                do_sample=True,
+                pad_token_id=self.tokenizer.eos_token_id
             )
             
-        answer = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Strip the input prompt from the generated output
+        input_length = inputs["input_ids"].shape[1]
+        answer = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True).strip()
         return answer
 
     def cleanup(self):
@@ -53,21 +68,15 @@ class RAGGenerator:
         gc.collect()
 
 def test_pipeline():
-    """Quick test for the generation pipeline."""
     generator = RAGGenerator()
     question = "What is the capital of France?"
-    contexts = [
-        "Paris is the capital and most populous city of France.",
-        "London is the capital of the United Kingdom."
-    ]
+    contexts = ["Paris is the capital and most populous city of France."]
     
-    print("\n--- TEST PROMPT & GENERATION ---")
-    print(f"Question: {question}")
+    print("\n--- TEST GENERATION ---")
     answer = generator.generate_answer(question, contexts)
-    print(f"Generated Answer: {answer}")
-    print("--------------------------------\n")
-    
+    print(f"Answer: {answer}")
+    print("-----------------------\n")
     generator.cleanup()
 
 if __name__ == "__main__":
-    test_pipeline()
+    pass
